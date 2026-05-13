@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SecureAPI Scanner</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Syne:wght@400;500;600&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0e0e10;
+    --bg2: #18181b;
+    --bg3: #222226;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.14);
+    --text: #f0f0f0;
+    --text2: #8a8a96;
+    --text3: #555560;
+    --accent: #e8ff47;
+    --font: 'Syne', sans-serif;
+    --mono: 'JetBrains Mono', monospace;
+    --radius: 10px;
+    --radius-lg: 14px;
+    --sidebar: 300px;
+  }
+
+  body { background: var(--bg); color: var(--text); font-family: var(--font); min-height: 100vh; }
+  .layout { display: grid; grid-template-columns: var(--sidebar) 1fr; grid-template-rows: auto 1fr; min-height: 100vh; }
+
+  .sidebar { grid-row: 1 / 3; background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; height: 100vh; position: sticky; top: 0; overflow: hidden; }
+  .sidebar-logo { padding: 1.5rem 1.25rem 1rem; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .sidebar-logo h1 { font-size: 1.4rem; font-weight: 600; letter-spacing: -0.5px; }
+  .sidebar-logo h1 span { color: var(--accent); }
+  .sidebar-logo p { font-size: 11px; color: var(--text3); margin-top: 3px; }
+  .sidebar-section { padding: 1rem 1.25rem 0.5rem; flex-shrink: 0; }
+  .sidebar-section-label { font-size: 10px; font-weight: 500; color: var(--text3); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; }
+  .history-list { flex: 1; overflow-y: auto; padding: 0 0.75rem 1rem; }
+  .history-list::-webkit-scrollbar { width: 4px; }
+  .history-list::-webkit-scrollbar-track { background: transparent; }
+  .history-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 99px; }
+  .history-item { padding: 9px 10px; border-radius: var(--radius); cursor: pointer; transition: background 0.12s; margin-bottom: 3px; border: 1px solid transparent; }
+  .history-item:hover { background: var(--bg3); }
+  .history-item.active { background: var(--bg3); border-color: var(--border); }
+  .history-item-url { font-size: 11px; font-family: var(--mono); color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
+  .history-item-meta { display: flex; align-items: center; gap: 6px; }
+  .h-status { font-size: 10px; padding: 1px 6px; border-radius: 99px; font-family: var(--mono); }
+  .status-done { background: rgba(50,200,100,0.15); color: #4ade80; }
+  .status-failed { background: rgba(220,50,50,0.15); color: #f87171; }
+  .status-running { background: rgba(240,140,30,0.15); color: #fb923c; }
+  .status-pending { background: rgba(140,140,160,0.15); color: #8a8a96; }
+  .h-time { font-size: 10px; color: var(--text3); }
+  .sidebar-actions { padding: 0.75rem; border-top: 1px solid var(--border); display: flex; gap: 6px; flex-shrink: 0; }
+  .sidebar-btn { flex: 1; padding: 7px; font-size: 11px; font-family: var(--font); background: none; border: 1px solid var(--border); border-radius: var(--radius); color: var(--text2); cursor: pointer; transition: all 0.12s; }
+  .sidebar-btn:hover { border-color: var(--border2); color: var(--text); }
+  .sidebar-btn.danger { color: #f87171; border-color: rgba(220,50,50,0.2); }
+  .sidebar-btn.danger:hover { background: rgba(220,50,50,0.08); }
+
+  .topbar { grid-column: 2; padding: 0 2rem; height: 56px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 1rem; background: var(--bg); position: sticky; top: 0; z-index: 10; }
+  .tabs { display: flex; gap: 4px; }
+  .tab { padding: 6px 14px; font-size: 12px; font-weight: 500; font-family: var(--font); cursor: pointer; background: none; color: var(--text2); border: 1px solid transparent; border-radius: var(--radius); transition: all 0.15s; }
+  .tab.active { background: var(--bg3); color: var(--text); border-color: var(--border); }
+  .tab:hover:not(.active) { color: var(--text); }
+  .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  .live-badge { font-size: 10px; font-family: var(--mono); padding: 3px 8px; border-radius: 99px; background: rgba(232,255,71,0.1); color: var(--accent); display: none; align-items: center; gap: 5px; }
+  .live-badge.visible { display: flex; }
+  .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+  .stop-btn-top { padding: 6px 14px; font-size: 12px; font-family: var(--font); background: none; border: 1px solid rgba(220,50,50,0.3); color: #f87171; border-radius: var(--radius); cursor: pointer; display: none; transition: all 0.12s; }
+  .stop-btn-top.visible { display: block; }
+  .stop-btn-top:hover { background: rgba(220,50,50,0.1); }
+
+  .main { grid-column: 2; padding: 2rem; overflow-y: auto; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+  .form-full { grid-column: 1 / -1; }
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.25rem; margin-bottom: 1rem; }
+  .card-title { font-size: 12px; font-weight: 500; color: var(--text2); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 1rem; }
+  .field-label { font-size: 11px; font-weight: 500; color: var(--text2); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; display: block; }
+  .field-hint { font-size: 11px; color: var(--text3); margin-top: 4px; }
+  .field-row { margin-bottom: 1rem; }
+  .field-row:last-child { margin-bottom: 0; }
+
+  input[type="text"], input[type="url"], textarea { width: 100%; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 9px 12px; font-size: 13px; font-family: var(--font); color: var(--text); outline: none; transition: border 0.15s; }
+  input:focus, textarea:focus { border-color: var(--border2); }
+  input::placeholder, textarea::placeholder { color: var(--text3); }
+  textarea { resize: vertical; min-height: 80px; font-family: var(--mono); font-size: 12px; line-height: 1.6; }
+  input[type="file"] { font-size: 13px; color: var(--text2); font-family: var(--font); }
+
+  .method-row { display: flex; gap: 5px; flex-wrap: wrap; }
+  .method-btn { padding: 6px 12px; font-size: 12px; font-weight: 500; font-family: var(--font); border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; background: var(--bg3); color: var(--text2); transition: all 0.12s; }
+  .method-btn.active { background: var(--accent); color: #0e0e10; border-color: var(--accent); }
+  .method-btn:hover:not(.active) { border-color: var(--border2); color: var(--text); }
+
+  .advanced-toggle { font-size: 12px; color: var(--text3); cursor: pointer; background: none; border: none; font-family: var(--font); display: flex; align-items: center; gap: 5px; padding: 0; transition: color 0.12s; }
+  .advanced-toggle:hover { color: var(--text2); }
+  .advanced-body { display: none; padding-top: 1rem; margin-top: 1rem; border-top: 1px solid var(--border); }
+  .advanced-body.open { display: block; }
+
+  .scanner-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+  .scanner-item { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; transition: all 0.12s; background: var(--bg3); }
+  .scanner-item:hover { border-color: var(--border2); }
+  .scanner-item.checked { border-color: rgba(232,255,71,0.25); background: rgba(232,255,71,0.04); }
+  .scanner-item input[type="checkbox"] { margin-top: 2px; flex-shrink: 0; cursor: pointer; accent-color: var(--accent); }
+  .scanner-name { font-size: 12px; font-weight: 500; color: var(--text); line-height: 1.3; }
+  .scanner-desc { font-size: 10px; color: var(--text2); margin-top: 2px; line-height: 1.4; }
+  .select-row { display: flex; gap: 10px; margin-bottom: 10px; }
+  .select-row button { font-size: 12px; color: var(--text3); background: none; border: none; cursor: pointer; font-family: var(--font); text-decoration: underline; transition: color 0.12s; }
+  .select-row button:hover { color: var(--text2); }
+
+  .sev-badge { font-size: 10px; font-weight: 500; padding: 2px 7px; border-radius: 99px; flex-shrink: 0; white-space: nowrap; font-family: var(--mono); }
+  .sev-critical { background: rgba(220,50,50,0.15); color: #f87171; }
+  .sev-high     { background: rgba(240,140,30,0.15); color: #fb923c; }
+  .sev-medium   { background: rgba(60,130,240,0.15); color: #60a5fa; }
+  .sev-low      { background: rgba(50,200,100,0.15); color: #4ade80; }
+  .sev-info     { background: rgba(140,140,160,0.15); color: #8a8a96; }
+
+  .scan-btn { width: 100%; padding: 13px; font-size: 14px; font-weight: 600; font-family: var(--font); background: var(--accent); color: #0e0e10; border: none; border-radius: var(--radius); cursor: pointer; margin-top: 1rem; transition: opacity 0.15s, transform 0.1s; letter-spacing: 0.02em; }
+  .scan-btn:hover { opacity: 0.9; }
+  .scan-btn:active { transform: scale(0.99); }
+  .scan-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .progress-wrap { margin-bottom: 1.5rem; display: none; }
+  .progress-wrap.visible { display: block; }
+  .progress-bar { height: 2px; background: var(--border); border-radius: 99px; overflow: hidden; margin-bottom: 6px; }
+  .progress-bar-inner { height: 100%; width: 40%; background: var(--accent); border-radius: 99px; animation: slide 1.2s ease-in-out infinite; }
+  @keyframes slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(350%); } }
+  .progress-text { font-size: 12px; color: var(--text2); }
+  .progress-count { font-size: 12px; color: var(--text3); float: right; font-family: var(--mono); }
+
+  .findings-wrap { display: none; }
+  .findings-wrap.visible { display: block; }
+  .findings-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 1.25rem; flex-wrap: wrap; gap: 8px; }
+  .findings-title { font-size: 18px; font-weight: 600; color: var(--text); }
+  .findings-url { font-size: 11px; color: var(--text3); font-family: var(--mono); margin-top: 3px; word-break: break-all; }
+  .summary-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { font-size: 11px; font-weight: 500; padding: 4px 10px; border-radius: 99px; font-family: var(--mono); }
+  .severity-group { margin-bottom: 1.5rem; }
+  .severity-group-label { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  .severity-group-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+  .findings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .finding-card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; transition: border-color 0.12s; }
+  .finding-card:hover { border-color: var(--border2); }
+  .finding-top { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 5px; }
+  .finding-title { font-size: 13px; font-weight: 500; color: var(--text); flex: 1; line-height: 1.4; }
+  .finding-scanner { font-size: 10px; color: var(--text3); font-family: var(--mono); margin-bottom: 5px; }
+  .finding-desc { font-size: 12px; color: var(--text2); line-height: 1.6; }
+  .toggle-evidence { font-size: 11px; color: var(--text3); background: none; border: none; cursor: pointer; font-family: var(--font); padding: 0; margin-top: 7px; text-decoration: underline; transition: color 0.12s; display: block; }
+  .toggle-evidence:hover { color: var(--text2); }
+  .finding-evidence { font-family: var(--mono); font-size: 10px; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; margin-top: 8px; color: var(--text2); white-space: pre-wrap; word-break: break-all; line-height: 1.6; display: none; }
+
+  /* Discovery table */
+  .disc-table { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; margin-top: 1rem; }
+  .disc-table-header { display: grid; grid-template-columns: 70px 1fr 130px 90px; padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.06em; }
+  .disc-table-row { display: grid; grid-template-columns: 70px 1fr 130px 90px; padding: 10px 14px; border-bottom: 1px solid var(--border); align-items: center; transition: background 0.1s; }
+  .disc-table-row:last-child { border-bottom: none; }
+  .disc-table-row:hover { background: var(--bg3); }
+  .disc-url { font-family: var(--mono); color: var(--text2); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .disc-source { color: var(--text3); font-size: 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .disc-scan-btn { padding: 4px 10px; font-size: 10px; font-weight: 600; font-family: var(--font); background: var(--accent); color: #0e0e10; border: none; border-radius: 6px; cursor: pointer; transition: opacity 0.12s; }
+  .disc-scan-btn:hover { opacity: 0.85; }
+  .spec-card { background: var(--bg2); border: 1px solid rgba(50,200,100,0.2); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px; }
+  .spec-actions { display: flex; gap: 8px; margin-top: 10px; }
+  .spec-btn-primary { padding: 5px 12px; font-size: 11px; font-weight: 600; font-family: var(--font); background: var(--accent); color: #0e0e10; border: none; border-radius: 6px; cursor: pointer; }
+  .spec-btn-secondary { padding: 5px 12px; font-size: 11px; font-family: var(--font); background: none; border: 1px solid var(--border2); color: var(--text2); border-radius: 6px; cursor: pointer; }
+  .spec-btn-secondary:hover { color: var(--text); }
+
+  .empty-state { text-align: center; padding: 4rem 2rem; color: var(--text3); }
+  .empty-state-icon { font-size: 2rem; margin-bottom: 1rem; opacity: 0.4; }
+  .empty-state p { font-size: 13px; }
+  .toast { position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%); background: #f87171; color: #0e0e10; padding: 10px 18px; border-radius: var(--radius); font-size: 13px; font-weight: 500; display: none; z-index: 999; }
+  .toast.visible { display: block; }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .topbar { grid-column: 1; }
+    .main { grid-column: 1; }
+    .scanner-grid { grid-template-columns: 1fr 1fr; }
+    .findings-grid { grid-template-columns: 1fr; }
+    .disc-table-header, .disc-table-row { grid-template-columns: 70px 1fr 80px; }
+    .disc-source { display: none; }
+  }
+  @media (max-width: 560px) {
+    .scanner-grid { grid-template-columns: 1fr; }
+    .form-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <h1>Secure<span>API</span></h1>
+      <p>Automated vulnerability scanner</p>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-section-label">
+        <span>Past scans</span>
+        <span id="scan-count" style="color:var(--text3);font-family:var(--mono);">0</span>
+      </div>
+    </div>
+    <div class="history-list" id="history-list">
+      <div style="font-size:12px;color:var(--text3);text-align:center;padding:1.5rem 0;">No scans yet.</div>
+    </div>
+    <div class="sidebar-actions">
+      <button class="sidebar-btn" onclick="loadHistory()">Refresh</button>
+      <button class="sidebar-btn danger" onclick="deleteAllScans()">Delete all</button>
+    </div>
+  </aside>
+
+  <div class="topbar">
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('single')">Single endpoint</button>
+      <button class="tab" onclick="switchTab('swagger-url')">Swagger URL</button>
+      <button class="tab" onclick="switchTab('swagger-upload')">Upload spec</button>
+      <button class="tab" onclick="switchTab('discover')">API Discovery</button>
+    </div>
+    <div class="topbar-right">
+      <div class="live-badge" id="live-badge"><div class="live-dot"></div> Scanning</div>
+      <button class="stop-btn-top" id="stop-btn" onclick="stopScan()">Stop scan</button>
+    </div>
+  </div>
+
+  <main class="main">
+
+    <!-- Single endpoint -->
+    <div id="panel-single" class="panel active">
+      <div class="form-grid">
+        <div class="card form-full">
+          <div class="card-title">Target</div>
+          <div class="field-row">
+            <label class="field-label">URL</label>
+            <input type="url" id="single-url" placeholder="https://api.example.com/users/1" />
+          </div>
+          <div class="field-row" style="margin-bottom:0;">
+            <label class="field-label">Method</label>
+            <div class="method-row">
+              <button class="method-btn active" onclick="setMethod(this,'GET')">GET</button>
+              <button class="method-btn" onclick="setMethod(this,'POST')">POST</button>
+              <button class="method-btn" onclick="setMethod(this,'PUT')">PUT</button>
+              <button class="method-btn" onclick="setMethod(this,'DELETE')">DELETE</button>
+              <button class="method-btn" onclick="setMethod(this,'PATCH')">PATCH</button>
+            </div>
+          </div>
+          <div style="margin-top:1rem;">
+            <button class="advanced-toggle" onclick="toggleAdv('adv1','adv1-arrow')">
+              <span id="adv1-arrow">▶</span> Advanced options
+            </button>
+            <div class="advanced-body" id="adv1">
+              <div class="field-row">
+                <label class="field-label">Authorization header <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;color:var(--text3)">(optional)</span></label>
+                <input type="text" id="single-auth" placeholder="Bearer eyJhbGciOiJIUzI1NiJ9..." />
+                <p class="field-hint">Only needed for auth-protected endpoints.</p>
+              </div>
+              <div class="field-row" style="margin-bottom:0;">
+                <label class="field-label">Request body <span style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11px;color:var(--text3)">(JSON, optional)</span></label>
+                <textarea id="single-body" placeholder='{"username": "test", "id": 1}'></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card form-full">
+          <div class="card-title">Scanners to run</div>
+          <div class="select-row">
+            <button onclick="selectAll('g1',true)">Select all</button>
+            <button onclick="selectAll('g1',false)">Clear all</button>
+          </div>
+          <div id="g1" class="scanner-grid"></div>
+        </div>
+      </div>
+      <button class="scan-btn" id="btn-single" onclick="runSingle()">Run scan</button>
+    </div>
+
+    <!-- Swagger URL -->
+    <div id="panel-swagger-url" class="panel">
+      <div class="card">
+        <div class="card-title">Swagger / OpenAPI spec URL</div>
+        <div class="field-row" style="margin-bottom:0;">
+          <input type="url" id="swagger-url-input" placeholder="https://petstore.swagger.io/v2/swagger.json" />
+          <p class="field-hint">Supports OpenAPI 2.x and 3.x — JSON or YAML. Scans every endpoint in the spec.</p>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Scanners to run</div>
+        <div class="select-row">
+          <button onclick="selectAll('g2',true)">Select all</button>
+          <button onclick="selectAll('g2',false)">Clear all</button>
+        </div>
+        <div id="g2" class="scanner-grid"></div>
+      </div>
+      <button class="scan-btn" id="btn-swagger" onclick="runSwagger()">Scan all endpoints</button>
+    </div>
+
+    <!-- Upload spec -->
+    <div id="panel-swagger-upload" class="panel">
+      <div class="card">
+        <div class="card-title">Upload spec file</div>
+        <div class="field-row" style="margin-bottom:0;">
+          <label class="field-label">File</label>
+          <input type="file" id="spec-file" accept=".json,.yaml,.yml" />
+          <p class="field-hint">Accepts .json or .yaml OpenAPI/Swagger spec files.</p>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Scanners to run</div>
+        <div class="select-row">
+          <button onclick="selectAll('g3',true)">Select all</button>
+          <button onclick="selectAll('g3',false)">Clear all</button>
+        </div>
+        <div id="g3" class="scanner-grid"></div>
+      </div>
+      <button class="scan-btn" id="btn-upload" onclick="runUpload()">Upload and scan</button>
+    </div>
+
+    <!-- API Discovery -->
+    <div id="panel-discover" class="panel">
+      <div class="card">
+        <div class="card-title">Website URL</div>
+        <div class="field-row" style="margin-bottom:0;">
+          <input type="url" id="discover-url" placeholder="https://example.com" />
+          <p class="field-hint">Enter any website URL. SecureAPI will crawl the page and its JS files to find all API endpoints, spec files, and routes — then let you scan any of them instantly.</p>
+        </div>
+      </div>
+      <button class="scan-btn" id="btn-discover" onclick="runDiscovery()">Discover endpoints</button>
+
+      <div id="discovery-results" style="display:none;margin-top:1.5rem;">
+
+        <!-- Spec files found -->
+        <div id="spec-files-section" style="display:none;margin-bottom:1.5rem;">
+          <div class="severity-group-label">
+            <span class="sev-badge sev-low">Spec files found</span>
+          </div>
+          <div id="spec-files-list"></div>
+        </div>
+
+        <!-- Endpoints table -->
+        <div id="endpoints-section">
+          <div class="severity-group-label">
+            <span class="sev-badge sev-info" id="endpoint-count">0 endpoints</span>
+          </div>
+          <div id="endpoints-table"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Progress -->
+    <div class="progress-wrap" id="progress-wrap">
+      <div class="progress-bar"><div class="progress-bar-inner"></div></div>
+      <span class="progress-text" id="progress-text">Scanning...</span>
+      <span class="progress-count" id="progress-count"></span>
+    </div>
+
+    <!-- Findings -->
+    <div class="findings-wrap" id="findings-wrap">
+      <div class="findings-header">
+        <div>
+          <div class="findings-title">Scan results</div>
+          <div class="findings-url" id="findings-url"></div>
+        </div>
+        <div class="summary-chips" id="summary-chips"></div>
+      </div>
+      <div id="findings-list"></div>
+    </div>
+
+    <!-- Empty state -->
+    <div class="empty-state" id="empty-state">
+      <div class="empty-state-icon">⬡</div>
+      <p>Enter a URL above and run a scan.<br>Results will appear here in real time.</p>
+    </div>
+
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const API = 'http://127.0.0.1:8000';
+  const SEV_ORDER = ['critical','high','medium','low','info'];
+  let selectedMethod = 'GET';
+  let scanController = null;
+  let pollInterval = null;
+
+  const SCANNERS = [
+    { id:'rate_limit',      name:'Rate limiting',               desc:'Floods endpoint, checks for blocking',           sev:'high' },
+    { id:'auth',            name:'Auth & JWT attacks',          desc:'alg:none, weak secrets, tampered tokens',        sev:'critical' },
+    { id:'sqli',            name:'SQL injection',               desc:'Error, boolean and time-based payloads',         sev:'critical' },
+    { id:'idor',            name:'IDOR / BOLA',                 desc:'Iterates IDs, detects missing auth checks',      sev:'high' },
+    { id:'mass_assignment', name:'Mass assignment',             desc:'Injects admin/role fields into body',            sev:'high' },
+    { id:'sensitive_data',  name:'Sensitive data exposure',     desc:'API keys, tokens, PII, stack traces',           sev:'critical' },
+    { id:'ssrf',            name:'Server-side request forgery', desc:'Injects internal URLs into parameters',         sev:'critical' },
+    { id:'cmd_injection',   name:'Command injection',           desc:'Shell payloads, detects remote execution',      sev:'critical' },
+    { id:'cors',            name:'CORS misconfiguration',       desc:'Wildcard origins, arbitrary origin reflection',  sev:'medium' },
+  ];
+
+  function renderGrid(id) {
+    document.getElementById(id).innerHTML = SCANNERS.map(s => `
+      <label class="scanner-item checked" onclick="toggleItem(this)">
+        <input type="checkbox" checked onclick="event.stopPropagation();toggleItem(this.closest('.scanner-item'))" />
+        <div style="flex:1;min-width:0;">
+          <div class="scanner-name">${s.name}</div>
+          <div class="scanner-desc">${s.desc}</div>
+        </div>
+        <span class="sev-badge sev-${s.sev}" style="align-self:flex-start;margin-top:1px;">${s.sev}</span>
+      </label>`).join('');
+  }
+
+  function toggleItem(el) {
+    const chk = el.querySelector('input');
+    chk.checked = !chk.checked;
+    el.classList.toggle('checked', chk.checked);
+  }
+
+  function selectAll(gridId, val) {
+    document.getElementById(gridId).querySelectorAll('.scanner-item').forEach(item => {
+      item.querySelector('input').checked = val;
+      item.classList.toggle('checked', val);
+    });
+  }
+
+  function getSelected(gridId) {
+    return Array.from(document.getElementById(gridId).querySelectorAll('input:checked'))
+      .map(i => i.closest('.scanner-item').querySelector('.scanner-name').textContent.trim())
+      .map(name => SCANNERS.find(s => s.name === name)?.id).filter(Boolean);
+  }
+
+  function setMethod(btn, m) {
+    selectedMethod = m;
+    document.querySelectorAll('.method-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+  }
+
+  function switchTab(name) {
+    const names = ['single','swagger-url','swagger-upload','discover'];
+    document.querySelectorAll('.tab').forEach((t,i) => t.classList.toggle('active', names[i]===name));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('panel-'+name).classList.add('active');
+  }
+
+  function toggleAdv(bodyId, arrowId) {
+    const open = document.getElementById(bodyId).classList.toggle('open');
+    document.getElementById(arrowId).textContent = open ? '▼' : '▶';
+  }
+
+  function setScanning(on, msg='Scanning...') {
+    document.getElementById('progress-wrap').classList.toggle('visible', on);
+    document.getElementById('progress-text').textContent = msg;
+    document.getElementById('live-badge').classList.toggle('visible', on);
+    document.getElementById('stop-btn').classList.toggle('visible', on);
+    ['btn-single','btn-swagger','btn-upload','btn-discover'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = on;
+    });
+  }
+
+  function stopScan() {
+    if (scanController) { scanController.abort(); scanController = null; }
+    if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+    setScanning(false);
+    showToast('Scan stopped.');
+    loadHistory();
+  }
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('visible');
+    setTimeout(() => t.classList.remove('visible'), 3500);
+  }
+
+  // ── Scan functions ──
+
+  async function runSingle() {
+    const url = document.getElementById('single-url').value.trim();
+    if (!url) { showToast('Please enter a target URL.'); return; }
+    const auth = document.getElementById('single-auth').value.trim();
+    let body = {};
+    try { body = JSON.parse(document.getElementById('single-body').value || '{}'); } catch(e) {}
+    const headers = auth ? { Authorization: auth } : {};
+    const scanners = getSelected('g1');
+    scanController = new AbortController();
+    setScanning(true, `Scanning ${url}...`);
+    hideFindings();
+    try {
+      const res = await fetch(`${API}/scan/single`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, method: selectedMethod, headers, body, scanners }),
+        signal: scanController.signal
+      });
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
+      const data = await res.json();
+      showFindings([data]);
+      loadHistory();
+    } catch(e) {
+      if (e.name !== 'AbortError') showToast('Error: ' + e.message);
+    } finally {
+      setScanning(false);
+      scanController = null;
+    }
+  }
+
+  async function runSwagger() {
+    const url = document.getElementById('swagger-url-input').value.trim();
+    if (!url) { showToast('Please enter a spec URL.'); return; }
+    const scanners = getSelected('g2');
+    scanController = new AbortController();
+    setScanning(true, 'Fetching spec and scanning endpoints...');
+    hideFindings();
+    startLivePoll();
+    try {
+      const res = await fetch(`${API}/scan/swagger`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ spec_url: url, scanners }),
+        signal: scanController.signal
+      });
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
+      const data = await res.json();
+      stopLivePoll();
+      showFindings(data);
+      loadHistory();
+    } catch(e) {
+      stopLivePoll();
+      if (e.name !== 'AbortError') showToast('Error: ' + e.message);
+    } finally {
+      setScanning(false);
+      scanController = null;
+    }
+  }
+
+  async function runUpload() {
+    const file = document.getElementById('spec-file').files[0];
+    if (!file) { showToast('Please select a spec file.'); return; }
+    const scanners = getSelected('g3');
+    if (!scanners.length) { showToast('Please select at least one scanner.'); return; }
+    const form = new FormData();
+    form.append('file', file);
+    form.append('scanners', scanners.join(','));
+    scanController = new AbortController();
+    setScanning(true, 'Uploading and scanning spec file...');
+    hideFindings();
+    startLivePoll();
+    try {
+      const res = await fetch(`${API}/scan/swagger/upload`, {
+        method: 'POST', body: form,
+        signal: scanController.signal
+      });
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
+      const data = await res.json();
+      stopLivePoll();
+      showFindings(data);
+      loadHistory();
+    } catch(e) {
+      stopLivePoll();
+      if (e.name !== 'AbortError') showToast('Error: ' + e.message);
+    } finally {
+      setScanning(false);
+      scanController = null;
+    }
+  }
+
+  // ── API Discovery ──
+
+  async function runDiscovery() {
+    const url = document.getElementById('discover-url').value.trim();
+    if (!url) { showToast('Please enter a website URL.'); return; }
+    setScanning(true, `Crawling ${url} for API endpoints...`);
+    document.getElementById('discovery-results').style.display = 'none';
+    try {
+      const res = await fetch(`${API}/discover`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url })
+      });
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
+      const data = await res.json();
+      renderDiscovery(data);
+    } catch(e) {
+      showToast('Error: ' + e.message);
+    } finally {
+      setScanning(false);
+    }
+  }
+
+  function renderDiscovery(data) {
+    document.getElementById('discovery-results').style.display = 'block';
+
+    // Spec files
+    const specSection = document.getElementById('spec-files-section');
+    const specList = document.getElementById('spec-files-list');
+    if (data.spec_files && data.spec_files.length > 0) {
+      specSection.style.display = 'block';
+      specList.innerHTML = data.spec_files.map(f => `
+        <div class="spec-card">
+          <div class="finding-top">
+            <div class="finding-title">${f.type}</div>
+            <span class="sev-badge sev-low">spec</span>
+          </div>
+          <div class="finding-scanner">${f.url}</div>
+          <div class="finding-desc">${f.note}</div>
+          <div class="spec-actions">
+            <button class="spec-btn-primary" onclick="useInSwagger('${f.url}')">Scan with Swagger URL tab</button>
+            <button class="spec-btn-secondary" onclick="copyToClipboard('${f.url}')">Copy URL</button>
+          </div>
+        </div>`).join('');
+    } else {
+      specSection.style.display = 'none';
+    }
+
+    // Endpoints table
+    const endpoints = data.endpoints || [];
+    document.getElementById('endpoint-count').textContent = `${endpoints.length} endpoints discovered`;
+
+    if (endpoints.length === 0) {
+      document.getElementById('endpoints-table').innerHTML =
+        '<div style="font-size:13px;color:var(--text3);padding:1rem 0;">No endpoints found. Try a different URL or check if the site has a public API.</div>';
+      return;
+    }
+
+    const methodColor = m => m==='GET'?'info':m==='POST'?'high':m==='DELETE'?'critical':'medium';
+
+    document.getElementById('endpoints-table').innerHTML = `
+      <div class="disc-table">
+        <div class="disc-table-header">
+          <div>Method</div>
+          <div>Endpoint</div>
+          <div>Source</div>
+          <div>Action</div>
+        </div>
+        ${endpoints.map(ep => `
+          <div class="disc-table-row">
+            <div><span class="sev-badge sev-${methodColor(ep.method)}">${ep.method}</span></div>
+            <div class="disc-url" title="${ep.url}">${ep.url}</div>
+            <div class="disc-source">${ep.source}</div>
+            <div><button class="disc-scan-btn" onclick="scanDiscoveredEndpoint('${ep.url.replace(/'/g,"\\'")}','${ep.method}')">Scan</button></div>
+          </div>`).join('')}
+      </div>`;
+  }
+
+  function useInSwagger(url) {
+    document.getElementById('swagger-url-input').value = url;
+    switchTab('swagger-url');
+    showToast('Spec URL loaded — select scanners and hit scan!');
+  }
+
+  function scanDiscoveredEndpoint(url, method) {
+    document.getElementById('single-url').value = url;
+    document.querySelectorAll('.method-btn').forEach(btn => {
+      const match = btn.textContent.trim() === method;
+      btn.classList.toggle('active', match);
+      if (match) selectedMethod = method;
+    });
+    switchTab('single');
+    showToast('Endpoint loaded in Single endpoint tab — hit Run scan!');
+  }
+
+  function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => showToast('Copied to clipboard!'));
+  }
+
+  // ── Live poll ──
+
+  function startLivePoll() {
+    if (pollInterval) clearInterval(pollInterval);
+    pollInterval = setInterval(async () => {
+      await loadHistory();
+      await liveUpdateFindings();
+    }, 3000);
+  }
+
+  function stopLivePoll() {
+    if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+  }
+
+  async function liveUpdateFindings() {
+    try {
+      const res = await fetch(`${API}/scans`);
+      const scans = await res.json();
+      const done = scans.filter(s => s.status === 'done');
+      if (done.length > 0) {
+        document.getElementById('progress-count').textContent = `${done.length} endpoint${done.length>1?'s':''} done`;
+        showFindings(done, true);
+      }
+    } catch(e) {}
+  }
+
+  // ── Findings ──
+
+  function hideFindings() {
+    document.getElementById('findings-wrap').classList.remove('visible');
+    document.getElementById('empty-state').style.display = 'block';
+    document.getElementById('findings-list').innerHTML = '';
+    document.getElementById('summary-chips').innerHTML = '';
+  }
+
+  function showFindings(scans, isLive=false) {
+    const allFindings = scans.flatMap(s => (s.findings || []).map(f => ({...f, _url: s.target_url})));
+    if (!allFindings.length && !isLive) return;
+    document.getElementById('empty-state').style.display = 'none';
+    document.getElementById('findings-wrap').classList.add('visible');
+    const counts = {};
+    SEV_ORDER.forEach(s => counts[s] = 0);
+    allFindings.forEach(f => { if (f.severity in counts) counts[f.severity]++; });
+    document.getElementById('findings-url').textContent =
+      scans.length === 1 ? scans[0].target_url : `${scans.length} endpoint${scans.length>1?'s':''} scanned`;
+    document.getElementById('summary-chips').innerHTML = SEV_ORDER
+      .filter(s => counts[s] > 0)
+      .map(s => `<span class="chip sev-badge sev-${s}">${counts[s]} ${s}</span>`).join('');
+    const grouped = {};
+    SEV_ORDER.forEach(s => grouped[s] = allFindings.filter(f => f.severity === s));
+    document.getElementById('findings-list').innerHTML = SEV_ORDER
+      .filter(s => grouped[s].length > 0)
+      .map(s => `
+        <div class="severity-group">
+          <div class="severity-group-label"><span class="sev-badge sev-${s}">${s}</span></div>
+          <div class="findings-grid">
+          ${grouped[s].map(f => `
+            <div class="finding-card">
+              <div class="finding-top">
+                <div class="finding-title">${f.title}</div>
+                <span class="sev-badge sev-${s}">${s}</span>
+              </div>
+              <div class="finding-scanner">${f.scanner}${f._url ? ' · ' + f._url : ''}</div>
+              <div class="finding-desc">${f.description}</div>
+              ${f.evidence ? `
+                <button class="toggle-evidence" onclick="toggleEvidence(this)">Show evidence</button>
+                <pre class="finding-evidence">${JSON.stringify(f.evidence, null, 2)}</pre>
+              ` : ''}
+            </div>`).join('')}
+          </div>
+        </div>`).join('');
+  }
+
+  function toggleEvidence(btn) {
+    const ev = btn.nextElementSibling;
+    if (!ev) return;
+    const isHidden = ev.style.display === 'none' || ev.style.display === '';
+    ev.style.display = isHidden ? 'block' : 'none';
+    btn.textContent = isHidden ? 'Hide evidence' : 'Show evidence';
+  }
+
+  // ── History ──
+
+  async function loadHistory() {
+    try {
+      const res = await fetch(`${API}/scans`);
+      const scans = await res.json();
+      const el = document.getElementById('history-list');
+      document.getElementById('scan-count').textContent = scans.length;
+      if (!scans.length) {
+        el.innerHTML = '<div style="font-size:12px;color:var(--text3);text-align:center;padding:1.5rem 0;">No scans yet.</div>';
+        return;
+      }
+      el.innerHTML = scans.slice(0, 50).map(s => {
+        const findings = s.findings || [];
+        const critical = findings.filter(f => f.severity === 'critical').length;
+        const high = findings.filter(f => f.severity === 'high').length;
+        const badge = critical > 0 ? `<span class="sev-badge sev-critical">${critical} crit</span>` :
+                      high > 0 ? `<span class="sev-badge sev-high">${high} high</span>` :
+                      findings.length > 0 ? `<span class="sev-badge sev-info">${findings.length}</span>` : '';
+        return `
+          <div class="history-item" id="scan-row-${s.id}" onclick="loadScan(${s.id})">
+            <div class="history-item-url">${s.target_url}</div>
+            <div class="history-item-meta">
+              <span class="h-status status-${s.status}">${s.status}</span>
+              <span class="h-time">${new Date(s.created_at + 'Z').toLocaleTimeString()}</span>
+              ${badge}
+            </div>
+          </div>`;
+      }).join('');
+    } catch(e) {}
+  }
+
+  async function loadScan(id) {
+    document.querySelectorAll('.history-item').forEach(i => i.classList.remove('active'));
+    const row = document.getElementById(`scan-row-${id}`);
+    if (row) row.classList.add('active');
+    try {
+      const res = await fetch(`${API}/scans/${id}`);
+      const data = await res.json();
+      if (!data.findings || data.findings.length === 0) { showToast('No findings for this scan yet.'); return; }
+      showFindings([data]);
+      setTimeout(() => {
+        document.getElementById('findings-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    } catch(e) { showToast('Could not load scan.'); }
+  }
+
+  async function deleteAllScans() {
+    if (!confirm('Delete all past scans? This cannot be undone.')) return;
+    try {
+      const res = await fetch(`${API}/scans`);
+      const scans = await res.json();
+      if (!scans.length) { showToast('No scans to delete.'); return; }
+      await Promise.all(scans.map(s => fetch(`${API}/scans/${s.id}`, { method: 'DELETE' })));
+      loadHistory();
+      hideFindings();
+      showToast('All scans deleted.');
+    } catch(e) { showToast('Could not delete all scans.'); }
+  }
+
+  setInterval(loadHistory, 5000);
+  renderGrid('g1');
+  renderGrid('g2');
+  renderGrid('g3');
+  loadHistory();
+</script>
+</body>
+</html>
